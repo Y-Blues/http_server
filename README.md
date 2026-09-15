@@ -51,8 +51,13 @@ config:
 | GET | `/api/items/<pluriel>` | `IItemCatalog.get_item_by_plural` |
 | GET | `/api/items/<pluriel>/schema` | `IItemCatalog.get_schema` |
 | GET | `/api/items/<pluriel>/empty` | `IItemCatalog.get_empty` |
+| GET/POST/PUT/DELETE | `/api/services/<nom>[/<segment>...]` | `IServiceEndpoint.call` (voir `endpoints_service`) |
 
 Une requête `GET`/`DELETE` transmet sa query string telle quelle en `params` (`filter`, `sort`, `limit`, `offset`, `expand`, `content`) ; une requête `POST`/`PUT` transmet son corps JSON décodé comme `fields`. Une combinaison méthode/chemin non listée répond `404`.
+
+## Services
+
+`/api/services/<nom>` route vers un `IExposedService` publié par `endpoints_service`. Sans `endpoints_service` chargé, ces routes répondent `404`. Voir le [README d'endpoints_service](../endpoints_service/README.md) pour déclarer un service.
 
 ## Authentification
 

@@ -14,6 +14,7 @@ APPLICATION = {
         bundle_prefix:
           - ycappuccino.storage
           - ycappuccino.endpoints_storage
+          - ycappuccino.endpoints_service
           - ycappuccino.http_server
           - PACKAGE
         layers:
@@ -43,6 +44,26 @@ APPLICATION = {
             @Property(name="title")
             def title(self, a_value):
                 self._title = a_value
+    """,
+    "PACKAGE/echo.py": """
+        from ycappuccino.api.endpoints_service import IExposedService, ServiceResult
+
+
+        class Echo(IExposedService):
+            name = "echo"
+            secure = False
+
+            def __init__(self):
+                pass
+
+            async def call(self, method, extra_path, params, body, subject):
+                return ServiceResult(body={"echo": body})
+
+            async def start(self):
+                pass
+
+            async def stop(self):
+                pass
     """,
 }
 
@@ -90,6 +111,12 @@ class TestHttpServerInFramework(unittest.TestCase):
 
         self.assertEqual(status, 200)
         self.assertIn(self.plural, [item["plural"] for item in body["data"]])
+
+    def test_service_route(self):
+        status, body = self.call("POST", "/api/services/echo", body=b'{"msg": "hi"}')
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["data"], {"echo": {"msg": "hi"}})
 
 
 if __name__ == "__main__":
