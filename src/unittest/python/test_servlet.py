@@ -188,5 +188,60 @@ class TestCrudRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, 404)
 
 
+class TestDraftRoutes(unittest.IsolatedAsyncioTestCase):
+
+    async def test_get_many(self):
+        servlet, _, drafts, _ = create_servlet()
+
+        response = await servlet.handle(request(sub_path="/drafts/books/review"))
+
+        self.assertEqual(json.loads(response.body)["meta"], {"type": "array", "size": 1})
+        self.assertEqual(drafts.calls, [("get_many", "book", "review", {}, None)])
+
+    async def test_get_one(self):
+        servlet, _, drafts, _ = create_servlet()
+
+        response = await servlet.handle(request(sub_path="/drafts/books/dune/review"))
+
+        self.assertEqual(json.loads(response.body)["data"], {"_id": "dune", "_draft": "review"})
+        self.assertEqual(drafts.calls, [("get_one", "book", "dune", "review", {}, None)])
+
+    async def test_save(self):
+        servlet, _, drafts, _ = create_servlet()
+
+        response = await servlet.handle(
+            request(method="PUT", sub_path="/drafts/books/dune/review", body=b'{"title": "v2"}')
+        )
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(drafts.calls, [("save", "book", "dune", "review", {"title": "v2"}, None)])
+
+    async def test_publish(self):
+        servlet, _, drafts, _ = create_servlet()
+
+        response = await servlet.handle(request(method="POST", sub_path="/drafts/books/dune/review/publish"))
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(drafts.calls, [("publish", "book", "dune", "review", None)])
+
+    async def test_discard(self):
+        servlet, _, drafts, _ = create_servlet()
+
+        response = await servlet.handle(request(method="DELETE", sub_path="/drafts/books/dune/review"))
+
+        self.assertEqual(json.loads(response.body)["data"], {})
+        self.assertEqual(drafts.calls, [("discard", "book", "dune", "review", None)])
+
+    async def test_not_found_error_is_mapped(self):
+        from ycappuccino.api.endpoints_storage import NotFound
+
+        servlet, _, drafts, _ = create_servlet()
+        drafts.error = NotFound("no draft")
+
+        response = await servlet.handle(request(method="DELETE", sub_path="/drafts/books/dune/review"))
+
+        self.assertEqual(response.status, 404)
+
+
 if __name__ == "__main__":
     unittest.main()

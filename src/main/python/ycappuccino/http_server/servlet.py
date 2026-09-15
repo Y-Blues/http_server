@@ -71,6 +71,8 @@ class ApiServlet(IHttpServlet):
         family, rest = segments[0], segments[1:]
         if family == "crud":
             return await self._route_crud(method, rest, params, fields, subject)
+        if family == "drafts":
+            return await self._route_drafts(method, rest, params, fields, subject)
         raise NotFound("not found")
 
     async def _route_crud(self, method, rest, params, fields, subject):
@@ -94,6 +96,29 @@ class ApiServlet(IHttpServlet):
             if method == "DELETE":
                 await self._crud.delete(item_id, id, subject)
                 return _ok(200, None)
+        raise NotFound("not found")
+
+    async def _route_drafts(self, method, rest, params, fields, subject):
+        if len(rest) == 2:
+            plural, draft = rest
+            item_id = await self._item_id(plural, subject)
+            if method == "GET":
+                return _ok(200, await self._drafts.get_many(item_id, draft, params, subject))
+        elif len(rest) == 3:
+            plural, id, draft = rest
+            item_id = await self._item_id(plural, subject)
+            if method == "GET":
+                return _ok(200, await self._drafts.get_one(item_id, id, draft, params, subject))
+            if method == "PUT":
+                return _ok(200, await self._drafts.save(item_id, id, draft, fields, subject))
+            if method == "DELETE":
+                await self._drafts.discard(item_id, id, draft, subject)
+                return _ok(200, None)
+        elif len(rest) == 4 and rest[3] == "publish":
+            plural, id, draft, _ = rest
+            item_id = await self._item_id(plural, subject)
+            if method == "POST":
+                return _ok(200, await self._drafts.publish(item_id, id, draft, subject))
         raise NotFound("not found")
 
     async def _item_id(self, plural, subject):
