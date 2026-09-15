@@ -243,5 +243,52 @@ class TestDraftRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, 404)
 
 
+class TestItemRoutes(unittest.IsolatedAsyncioTestCase):
+
+    async def test_get_items(self):
+        servlet, _, _, catalog = create_servlet()
+
+        response = await servlet.handle(request(sub_path="/items"))
+
+        self.assertEqual(json.loads(response.body)["data"], [{"id": "book", "plural": "books"}])
+        self.assertEqual(catalog.calls, [("get_items", None)])
+
+    async def test_get_item_by_plural(self):
+        servlet, _, _, _ = create_servlet()
+
+        response = await servlet.handle(request(sub_path="/items/books"))
+
+        self.assertEqual(json.loads(response.body)["data"], {"id": "book", "plural": "books"})
+
+    async def test_schema(self):
+        servlet, _, _, catalog = create_servlet()
+
+        response = await servlet.handle(request(sub_path="/items/books/schema"))
+
+        self.assertEqual(json.loads(response.body)["data"], {"type": "object"})
+        self.assertIn(("get_schema", "book", None), catalog.calls)
+
+    async def test_empty(self):
+        servlet, _, _, _ = create_servlet()
+
+        response = await servlet.handle(request(sub_path="/items/books/empty"))
+
+        self.assertEqual(json.loads(response.body)["data"], {"_id": "empty"})
+
+    async def test_non_get_is_not_found(self):
+        servlet, _, _, _ = create_servlet()
+
+        response = await servlet.handle(request(method="POST", sub_path="/items"))
+
+        self.assertEqual(response.status, 404)
+
+    async def test_unknown_plural_is_not_found(self):
+        servlet, _, _, _ = create_servlet()
+
+        response = await servlet.handle(request(sub_path="/items/unknown"))
+
+        self.assertEqual(response.status, 404)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -73,6 +73,8 @@ class ApiServlet(IHttpServlet):
             return await self._route_crud(method, rest, params, fields, subject)
         if family == "drafts":
             return await self._route_drafts(method, rest, params, fields, subject)
+        if family == "items":
+            return await self._route_items(method, rest, subject)
         raise NotFound("not found")
 
     async def _route_crud(self, method, rest, params, fields, subject):
@@ -119,6 +121,23 @@ class ApiServlet(IHttpServlet):
             item_id = await self._item_id(plural, subject)
             if method == "POST":
                 return _ok(200, await self._drafts.publish(item_id, id, draft, subject))
+        raise NotFound("not found")
+
+    async def _route_items(self, method, rest, subject):
+        if method != "GET":
+            raise NotFound("not found")
+        if not rest:
+            return _ok(200, await self._catalog.get_items(subject))
+        if len(rest) == 1:
+            (plural,) = rest
+            return _ok(200, await self._catalog.get_item_by_plural(plural, subject))
+        if len(rest) == 2:
+            plural, action = rest
+            item_id = await self._item_id(plural, subject)
+            if action == "schema":
+                return _ok(200, await self._catalog.get_schema(item_id, subject))
+            if action == "empty":
+                return _ok(200, await self._catalog.get_empty(item_id, subject))
         raise NotFound("not found")
 
     async def _item_id(self, plural, subject):
