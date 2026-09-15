@@ -138,7 +138,7 @@ class FakeItemCatalog(IItemCatalog):
 
 class TestApiServlet(unittest.IsolatedAsyncioTestCase):
     async def test_empty_list(self):
-        servlet = ApiServlet(FakeCrud(), None, FakeItemCatalog(), [])
+        servlet = ApiServlet(FakeCrud(), None, FakeItemCatalog(), [], [])
 
         request = HttpRequest(
             method="GET", path="/api/crud/books", prefix="/api", sub_path="/crud/books",

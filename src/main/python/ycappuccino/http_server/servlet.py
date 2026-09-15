@@ -5,6 +5,7 @@ ApiServlet: HTTP adapter over the endpoints_storage use cases (ICrud, IDrafts, I
 import json
 import logging
 
+from ycappuccino.api.endpoints_service import IServiceEndpoint
 from ycappuccino.api.endpoints_storage import (
     Forbidden,
     ICrud,
@@ -28,12 +29,14 @@ class ApiServlet(IHttpServlet):
         drafts: IDrafts,
         catalog: IItemCatalog,
         authentications: list[IAuthentication],
+        services: list[IServiceEndpoint],
         path: str = "/api",
     ):
         self._crud = crud
         self._drafts = drafts
         self._catalog = catalog
         self._authentications = authentications
+        self._services = services
 
     async def start(self):
         pass
@@ -75,6 +78,8 @@ class ApiServlet(IHttpServlet):
             return await self._route_drafts(method, rest, params, fields, subject)
         if family == "items":
             return await self._route_items(method, rest, subject)
+        if family == "services":
+            return await self._route_services(method, rest, params, fields, subject)
         raise NotFound("not found")
 
     async def _route_crud(self, method, rest, params, fields, subject):
@@ -140,6 +145,14 @@ class ApiServlet(IHttpServlet):
                 return _ok(200, await self._catalog.get_empty(item_id, subject))
         raise NotFound("not found")
 
+    async def _route_services(self, method, rest, params, fields, subject):
+        services = list(self._services)
+        if not rest or not services:
+            raise NotFound("not found")
+        name, extra_path = rest[0], rest[1:]
+        result = await services[0].call(name, method, extra_path, params, fields, subject)
+        return _ok(200, result.body, headers=result.headers)
+
     async def _item_id(self, plural, subject):
         item = await self._catalog.get_item_by_plural(plural, subject)
         return item["id"]
@@ -158,7 +171,7 @@ def _decode_body(request):
         raise InvalidRequest(f"invalid JSON body: {error}") from None
 
 
-def _ok(status, payload) -> HttpResponse:
+def _ok(status, payload, headers=None) -> HttpResponse:
     if isinstance(payload, dict) and "items" in payload and "total" in payload:
         meta = {"type": "array", "size": payload["total"]}
         data = payload["items"]
@@ -172,7 +185,7 @@ def _ok(status, payload) -> HttpResponse:
         meta = {"type": "object", "size": 1}
         data = payload
     body = json.dumps({"status": status, "meta": meta, "data": data}).encode()
-    return HttpResponse(status=status, body=body, content_type="application/json")
+    return HttpResponse(status=status, body=body, content_type="application/json", headers=dict(headers or {}))
 
 
 def _error(status, error) -> HttpResponse:

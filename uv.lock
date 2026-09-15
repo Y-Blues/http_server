@@ -196,6 +196,21 @@ requires-dist = [
 ]
 
 [[package]]
+name = "ycappuccino-endpoints-service"
+version = "0.1.0"
+source = { editable = "../endpoints_service" }
+dependencies = [
+    { name = "ycappuccino-api" },
+    { name = "ycappuccino-core" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "ycappuccino-api", editable = "../api" },
+    { name = "ycappuccino-core", editable = "../core" },
+]
+
+[[package]]
 name = "ycappuccino-endpoints-storage"
 version = "0.1.0"
 source = { editable = "../endpoints_storage" }
@@ -219,6 +234,7 @@ source = { editable = "." }
 dependencies = [
     { name = "ycappuccino-api" },
     { name = "ycappuccino-core" },
+    { name = "ycappuccino-endpoints-service" },
     { name = "ycappuccino-endpoints-storage" },
     { name = "ycappuccino-storage" },
 ]
@@ -227,6 +243,7 @@ dependencies = [
 requires-dist = [
     { name = "ycappuccino-api", editable = "../api" },
     { name = "ycappuccino-core", editable = "../core" },
+    { name = "ycappuccino-endpoints-service", editable = "../endpoints_service" },
     { name = "ycappuccino-endpoints-storage", editable = "../endpoints_storage" },
     { name = "ycappuccino-storage", editable = "../storage" },
 ]

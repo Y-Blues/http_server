@@ -2,6 +2,7 @@
 Fake use cases shared by the ApiServlet tests.
 """
 
+from ycappuccino.api.endpoints_service import IServiceEndpoint, ServiceResult
 from ycappuccino.api.endpoints_storage import ICrud, IDrafts, IItemCatalog, NotFound
 from ycappuccino.api.http_server import IAuthentication
 
@@ -147,11 +148,31 @@ class FakeAuthentication(IAuthentication):
         pass
 
 
-def create_servlet(subject=None, authentications=None):
+class FakeServiceEndpoint(IServiceEndpoint):
+
+    def __init__(self):
+        self.calls = []
+        self.error = None
+        self.result = ServiceResult(body={"ok": True})
+
+    async def call(self, name, method, extra_path, params, body, subject):
+        self.calls.append((name, method, extra_path, params, body, subject))
+        if self.error is not None:
+            raise self.error
+        return self.result
+
+    async def start(self):
+        pass
+
+    async def stop(self):
+        pass
+
+
+def create_servlet(subject=None, authentications=None, services=None):
     """a servlet wired to fresh fakes; returns (servlet, crud, drafts, catalog)"""
     from ycappuccino.http_server.servlet import ApiServlet
 
     crud, drafts, catalog = FakeCrud(), FakeDrafts(), FakeItemCatalog()
     if authentications is None:
         authentications = [FakeAuthentication(subject)]
-    return ApiServlet(crud, drafts, catalog, authentications), crud, drafts, catalog
+    return ApiServlet(crud, drafts, catalog, authentications, services or []), crud, drafts, catalog

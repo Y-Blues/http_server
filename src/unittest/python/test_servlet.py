@@ -1,8 +1,9 @@
 import json
 import unittest
 
-from servlet_fixtures import FakeAuthentication, SUBJECT, create_servlet
+from servlet_fixtures import FakeAuthentication, FakeServiceEndpoint, SUBJECT, create_servlet
 
+from ycappuccino.api.endpoints_service import ServiceResult
 from ycappuccino.api.http import HttpRequest
 from ycappuccino.http_server.servlet import _decode_body, _error, _ok, _segments
 
@@ -288,6 +289,56 @@ class TestItemRoutes(unittest.IsolatedAsyncioTestCase):
         response = await servlet.handle(request(sub_path="/items/unknown"))
 
         self.assertEqual(response.status, 404)
+
+
+class TestServiceRoutes(unittest.IsolatedAsyncioTestCase):
+
+    async def test_call_forwards_method_extra_path_params_body_and_subject(self):
+        services = FakeServiceEndpoint()
+        servlet, _, _, _ = create_servlet(subject=SUBJECT, services=[services])
+
+        response = await servlet.handle(
+            request(method="POST", sub_path="/services/echo/x/y", query={"q": "1"}, body=b'{"msg": "hi"}')
+        )
+
+        self.assertEqual(json.loads(response.body)["data"], {"ok": True})
+        self.assertEqual(
+            services.calls, [("echo", "POST", ["x", "y"], {"q": "1"}, {"msg": "hi"}, SUBJECT)]
+        )
+
+    async def test_result_headers_are_reported_on_the_response(self):
+        services = FakeServiceEndpoint()
+        services.result = ServiceResult(body={}, headers={"set-cookie": "a=b"})
+        servlet, _, _, _ = create_servlet(services=[services])
+
+        response = await servlet.handle(request(method="POST", sub_path="/services/login"))
+
+        self.assertEqual(response.headers.get("set-cookie"), "a=b")
+
+    async def test_no_service_name_is_not_found(self):
+        servlet, _, _, _ = create_servlet(services=[FakeServiceEndpoint()])
+
+        response = await servlet.handle(request(sub_path="/services"))
+
+        self.assertEqual(response.status, 404)
+
+    async def test_no_service_endpoint_registered_is_not_found(self):
+        servlet, _, _, _ = create_servlet(services=[])
+
+        response = await servlet.handle(request(sub_path="/services/echo"))
+
+        self.assertEqual(response.status, 404)
+
+    async def test_service_errors_are_mapped(self):
+        from ycappuccino.api.endpoints_storage import Forbidden
+
+        services = FakeServiceEndpoint()
+        services.error = Forbidden("no")
+        servlet, _, _, _ = create_servlet(services=[services])
+
+        response = await servlet.handle(request(method="POST", sub_path="/services/secret"))
+
+        self.assertEqual(response.status, 403)
 
 
 if __name__ == "__main__":
