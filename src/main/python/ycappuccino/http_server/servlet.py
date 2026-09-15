@@ -66,6 +66,34 @@ class ApiServlet(IHttpServlet):
         return await authentications[0].authenticate(request.headers)
 
     async def _route(self, method, segments, params, fields, subject):
+        if not segments:
+            raise NotFound("not found")
+        family, rest = segments[0], segments[1:]
+        if family == "crud":
+            return await self._route_crud(method, rest, params, fields, subject)
+        raise NotFound("not found")
+
+    async def _route_crud(self, method, rest, params, fields, subject):
+        if len(rest) == 1:
+            (plural,) = rest
+            item_id = await self._item_id(plural, subject)
+            if method == "GET":
+                return _ok(200, await self._crud.get_many(item_id, params, subject))
+            if method == "POST":
+                return _ok(201, await self._crud.create(item_id, fields, subject))
+            if method == "DELETE":
+                count = await self._crud.delete_many(item_id, params.get("filter"), subject)
+                return _ok(200, {"deleted": count})
+        elif len(rest) == 2:
+            plural, id = rest
+            item_id = await self._item_id(plural, subject)
+            if method == "GET":
+                return _ok(200, await self._crud.get_one(item_id, id, params, subject))
+            if method == "PUT":
+                return _ok(200, await self._crud.update(item_id, id, fields, subject))
+            if method == "DELETE":
+                await self._crud.delete(item_id, id, subject)
+                return _ok(200, None)
         raise NotFound("not found")
 
     async def _item_id(self, plural, subject):

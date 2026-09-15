@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from servlet_fixtures import FakeAuthentication, create_servlet
+from servlet_fixtures import FakeAuthentication, SUBJECT, create_servlet
 
 from ycappuccino.api.http import HttpRequest
 from ycappuccino.http_server.servlet import _decode_body, _error, _ok, _segments
@@ -95,6 +95,97 @@ class TestHandleBasics(unittest.IsolatedAsyncioTestCase):
         response = await servlet.handle(request(method="POST", sub_path="/crud/books", body=b"{bad"))
 
         self.assertEqual(response.status, 400)
+
+
+class TestCrudRoutes(unittest.IsolatedAsyncioTestCase):
+
+    async def test_get_many(self):
+        servlet, crud, _, _ = create_servlet()
+
+        response = await servlet.handle(request(sub_path="/crud/books", query={"limit": "5"}))
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(json.loads(response.body)["meta"], {"type": "array", "size": 2})
+        self.assertEqual(crud.calls, [("get_many", "book", {"limit": "5"}, None)])
+
+    async def test_get_one(self):
+        servlet, crud, _, _ = create_servlet()
+
+        response = await servlet.handle(request(sub_path="/crud/books/dune"))
+
+        self.assertEqual(json.loads(response.body)["data"], {"_id": "dune", "item_id": "book"})
+        self.assertEqual(crud.calls, [("get_one", "book", "dune", {}, None)])
+
+    async def test_create_returns_201(self):
+        servlet, crud, _, _ = create_servlet()
+
+        response = await servlet.handle(
+            request(method="POST", sub_path="/crud/books", body=b'{"title": "Dune"}')
+        )
+
+        self.assertEqual(response.status, 201)
+        self.assertEqual(crud.calls, [("create", "book", {"title": "Dune"}, None)])
+
+    async def test_update(self):
+        servlet, crud, _, _ = create_servlet()
+
+        response = await servlet.handle(
+            request(method="PUT", sub_path="/crud/books/dune", body=b'{"pages": 413}')
+        )
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(crud.calls, [("update", "book", "dune", {"pages": 413}, None)])
+
+    async def test_delete(self):
+        servlet, crud, _, _ = create_servlet()
+
+        response = await servlet.handle(request(method="DELETE", sub_path="/crud/books/dune"))
+
+        self.assertEqual(json.loads(response.body)["data"], {})
+        self.assertEqual(crud.calls, [("delete", "book", "dune", None)])
+
+    async def test_delete_many_wraps_the_count(self):
+        servlet, crud, _, _ = create_servlet()
+
+        response = await servlet.handle(
+            request(method="DELETE", sub_path="/crud/books", query={"filter": '{"pages": {"$gt": 300}}'})
+        )
+
+        self.assertEqual(json.loads(response.body)["data"], {"deleted": 3})
+        self.assertEqual(
+            crud.calls, [("delete_many", "book", '{"pages": {"$gt": 300}}', None)]
+        )
+
+    async def test_subject_is_forwarded(self):
+        servlet, crud, _, _ = create_servlet(subject=SUBJECT)
+
+        await servlet.handle(request(sub_path="/crud/books/dune"))
+
+        self.assertEqual(crud.calls, [("get_one", "book", "dune", {}, SUBJECT)])
+
+    async def test_unknown_plural_is_not_found(self):
+        servlet, _, _, _ = create_servlet()
+
+        response = await servlet.handle(request(sub_path="/crud/unknown/dune"))
+
+        self.assertEqual(response.status, 404)
+
+    async def test_crud_errors_are_mapped(self):
+        from ycappuccino.api.endpoints_storage import Forbidden
+
+        servlet, crud, _, _ = create_servlet()
+        crud.error = Forbidden("no")
+
+        response = await servlet.handle(request(sub_path="/crud/books/dune"))
+
+        self.assertEqual(response.status, 403)
+
+    async def test_wrong_method_for_path_is_not_found(self):
+        servlet, _, _, _ = create_servlet()
+
+        response = await servlet.handle(request(method="PUT", sub_path="/crud/books"))
+
+        self.assertEqual(response.status, 404)
 
 
 if __name__ == "__main__":
