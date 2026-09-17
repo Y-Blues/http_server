@@ -4,6 +4,7 @@ ApiServlet: HTTP adapter over the endpoints_storage use cases (ICrud, IDrafts, I
 
 import json
 import logging
+from typing import Any
 
 from ycappuccino.api.endpoints_service import IServiceEndpoint
 from ycappuccino.api.endpoints_storage import (
@@ -31,17 +32,17 @@ class ApiServlet(IHttpServlet):
         authentications: list[IAuthentication],
         services: list[IServiceEndpoint],
         path: str = "/api",
-    ):
+    ) -> None:
         self._crud = crud
         self._drafts = drafts
         self._catalog = catalog
         self._authentications = authentications
         self._services = services
 
-    async def start(self):
+    async def start(self) -> None:
         pass
 
-    async def stop(self):
+    async def stop(self) -> None:
         pass
 
     async def handle(self, request: HttpRequest) -> HttpResponse:
@@ -62,13 +63,15 @@ class ApiServlet(IHttpServlet):
             _logger.exception("unhandled error handling %s %s", request.method, request.path)
             return _error(500, "internal error")
 
-    async def _authenticate(self, request):
+    async def _authenticate(self, request: HttpRequest) -> dict | None:
         authentications = list(self._authentications)
         if not authentications:
             return None
         return await authentications[0].authenticate(request.headers)
 
-    async def _route(self, method, segments, params, fields, subject):
+    async def _route(
+        self, method: str, segments: list, params: dict, fields: Any, subject: dict | None
+    ) -> HttpResponse:
         if not segments:
             raise NotFound("not found")
         family, rest = segments[0], segments[1:]
@@ -82,7 +85,9 @@ class ApiServlet(IHttpServlet):
             return await self._route_services(method, rest, params, fields, subject)
         raise NotFound("not found")
 
-    async def _route_crud(self, method, rest, params, fields, subject):
+    async def _route_crud(
+        self, method: str, rest: list, params: dict, fields: Any, subject: dict | None
+    ) -> HttpResponse:
         if len(rest) == 1:
             (plural,) = rest
             item_id = await self._item_id(plural, subject)
@@ -105,7 +110,9 @@ class ApiServlet(IHttpServlet):
                 return _ok(200, None)
         raise NotFound("not found")
 
-    async def _route_drafts(self, method, rest, params, fields, subject):
+    async def _route_drafts(
+        self, method: str, rest: list, params: dict, fields: Any, subject: dict | None
+    ) -> HttpResponse:
         if len(rest) == 2:
             plural, draft = rest
             item_id = await self._item_id(plural, subject)
@@ -128,7 +135,7 @@ class ApiServlet(IHttpServlet):
                 return _ok(200, await self._drafts.publish(item_id, id, draft, subject))
         raise NotFound("not found")
 
-    async def _route_items(self, method, rest, subject):
+    async def _route_items(self, method: str, rest: list, subject: dict | None) -> HttpResponse:
         if method != "GET":
             raise NotFound("not found")
         if not rest:
@@ -145,7 +152,9 @@ class ApiServlet(IHttpServlet):
                 return _ok(200, await self._catalog.get_empty(item_id, subject))
         raise NotFound("not found")
 
-    async def _route_services(self, method, rest, params, fields, subject):
+    async def _route_services(
+        self, method: str, rest: list, params: dict, fields: Any, subject: dict | None
+    ) -> HttpResponse:
         services = list(self._services)
         if not rest or not services:
             raise NotFound("not found")
@@ -153,16 +162,16 @@ class ApiServlet(IHttpServlet):
         result = await services[0].call(name, method, extra_path, params, fields, subject)
         return _ok(200, result.body, headers=result.headers)
 
-    async def _item_id(self, plural, subject):
+    async def _item_id(self, plural: str, subject: dict | None) -> str:
         item = await self._catalog.get_item_by_plural(plural, subject)
         return item["id"]
 
 
-def _segments(request) -> list:
+def _segments(request: HttpRequest) -> list:
     return [segment for segment in request.sub_path.strip("/").split("/") if segment]
 
 
-def _decode_body(request):
+def _decode_body(request: HttpRequest) -> Any:
     if not request.body:
         return None
     try:
@@ -171,7 +180,7 @@ def _decode_body(request):
         raise InvalidRequest(f"invalid JSON body: {error}") from None
 
 
-def _ok(status, payload, headers=None) -> HttpResponse:
+def _ok(status: int, payload: Any, headers: dict | None = None) -> HttpResponse:
     if isinstance(payload, dict) and "items" in payload and "total" in payload:
         meta = {"type": "array", "size": payload["total"]}
         data = payload["items"]
@@ -188,7 +197,7 @@ def _ok(status, payload, headers=None) -> HttpResponse:
     return HttpResponse(status=status, body=body, content_type="application/json", headers=dict(headers or {}))
 
 
-def _error(status, error) -> HttpResponse:
+def _error(status: int, error: Exception | str) -> HttpResponse:
     message = error if isinstance(error, str) else str(error)
     body = json.dumps({"status": status, "meta": {"type": "object"}, "data": {"error": message}}).encode()
     return HttpResponse(status=status, body=body, content_type="application/json")
