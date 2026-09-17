@@ -64,10 +64,13 @@ class ApiServlet(IHttpServlet):
             return _error(500, "internal error")
 
     async def _authenticate(self, request: HttpRequest) -> dict | None:
-        authentications = list(self._authentications)
-        if not authentications:
-            return None
-        return await authentications[0].authenticate(request.headers)
+        # several providers coexist (a user JWT, a peer HMAC signature): the first to recognize the
+        # request decides its subject
+        for authentication in list(self._authentications):
+            subject = await authentication.authenticate(request.headers, request.method, request.path, request.body)
+            if subject is not None:
+                return subject
+        return None
 
     async def _route(
         self, method: str, segments: list, params: dict, fields: Any, subject: dict | None

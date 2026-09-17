@@ -67,13 +67,37 @@ class TestEnvelope(unittest.TestCase):
 class TestHandleBasics(unittest.IsolatedAsyncioTestCase):
     """behaviors common to every route: authentication, unmatched path, malformed body"""
 
-    async def test_authentication_is_called_with_the_request_headers(self):
+    async def test_authentication_sees_the_whole_request(self):
         authentication = FakeAuthentication(subject={"sub": "alice"})
         servlet, _, _, _ = create_servlet(authentications=[authentication])
 
-        await servlet.handle(request(sub_path="/unknown", headers={"authorization": "Bearer x"}))
+        await servlet.handle(request("POST", sub_path="/unknown", headers={"authorization": "Bearer x"}, body=b"{}"))
 
-        self.assertEqual(authentication.calls, [{"authorization": "Bearer x"}])
+        self.assertEqual(authentication.calls, [({"authorization": "Bearer x"}, "POST", "/api/unknown", b"{}")])
+
+    async def test_the_first_provider_recognizing_the_request_wins(self):
+        declines, accepts, never_asked = (
+            FakeAuthentication(subject=None),
+            FakeAuthentication(subject={"peer": "backend-1"}),
+            FakeAuthentication(subject={"sub": "mallory"}),
+        )
+        services = FakeServiceEndpoint()
+        servlet, _, _, _ = create_servlet(authentications=[declines, accepts, never_asked], services=[services])
+
+        await servlet.handle(request("POST", sub_path="/services/ping"))
+
+        self.assertEqual(services.calls[0][5], {"peer": "backend-1"})
+        self.assertEqual(never_asked.calls, [])
+
+    async def test_no_provider_recognizing_the_request_means_anonymous(self):
+        services = FakeServiceEndpoint()
+        servlet, _, _, _ = create_servlet(
+            authentications=[FakeAuthentication(subject=None), FakeAuthentication(subject=None)], services=[services]
+        )
+
+        await servlet.handle(request("POST", sub_path="/services/ping"))
+
+        self.assertIsNone(services.calls[0][5])
 
     async def test_no_authentication_service_means_anonymous(self):
         servlet, _, _, _ = create_servlet(authentications=[])

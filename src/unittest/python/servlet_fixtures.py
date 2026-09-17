@@ -137,8 +137,8 @@ class FakeAuthentication(IAuthentication):
         self.subject = subject
         self.calls = []
 
-    async def authenticate(self, headers):
-        self.calls.append(headers)
+    async def authenticate(self, headers, method, path, body):
+        self.calls.append((headers, method, path, body))
         return self.subject
 
     async def start(self):

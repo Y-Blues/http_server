@@ -66,7 +66,7 @@ from ycappuccino.api.http_server import IAuthentication
 
 
 class DemoAuthentication(IAuthentication):
-    async def authenticate(self, headers):
+    async def authenticate(self, headers, method, path, body):
         token = headers.get("authorization", "").removeprefix("Bearer ")
         return {"sub": "alice", "tid": "acme"} if token == "demo" else None
 
@@ -77,7 +77,12 @@ class DemoAuthentication(IAuthentication):
         pass
 ```
 
-Sans aucune `IAuthentication` publiée, toutes les requêtes sont anonymes : les items publics restent accessibles, les items sécurisés répondent `401`/`403` selon les règles d'`endpoints_storage`. `permissions_app` fournira l'implémentation JWT.
+Les noms d'en-têtes arrivent toujours en minuscules. Plusieurs `IAuthentication` peuvent être publiées
+(par exemple le JWT utilisateur de `permissions_app` et la signature HMAC de pair de `remote`) : elles sont
+essayées dans l'ordre, la première qui retourne un sujet l'emporte ; `method`/`path`/`body` permettent à un
+fournisseur de vérifier une signature couvrant toute la requête.
+
+Sans aucune `IAuthentication` publiée, ou si aucune ne reconnaît la requête, elle est anonyme : les items publics restent accessibles, les items sécurisés répondent `401`/`403` selon les règles d'`endpoints_storage`. `permissions_app` fournira l'implémentation JWT.
 
 ## Erreurs et enveloppe
 

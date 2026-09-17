@@ -12,7 +12,7 @@ from ycappuccino.http_server.servlet import ApiServlet
 
 # section "Authentification"
 class DemoAuthentication(IAuthentication):
-    async def authenticate(self, headers):
+    async def authenticate(self, headers, method, path, body):
         token = headers.get("authorization", "").removeprefix("Bearer ")
         return {"sub": "alice", "tid": "acme"} if token == "demo" else None
 
@@ -63,8 +63,8 @@ class TestReadmeExamples(unittest.IsolatedAsyncioTestCase):
     async def test_authentication_section(self):
         auth = DemoAuthentication()
 
-        self.assertIsNone(await auth.authenticate({}))
-        self.assertEqual(await auth.authenticate({"authorization": "Bearer demo"}), {"sub": "alice", "tid": "acme"})
+        self.assertIsNone(await auth.authenticate({}, "GET", "/api/items", b""))
+        self.assertEqual(await auth.authenticate({"authorization": "Bearer demo"}, "GET", "/api/items", b""), {"sub": "alice", "tid": "acme"})
 
     async def test_testing_section(self):
         servlet = ApiServlet(FakeCrud(), None, FakeItemCatalog(), [], [])
