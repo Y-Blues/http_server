@@ -365,5 +365,61 @@ class TestServiceRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, 403)
 
 
+
+WEB = "http://localhost:8304"
+
+
+class TestCrossOrigin(unittest.IsolatedAsyncioTestCase):
+    """a page served by another origin (a web front process) calling this API"""
+
+    async def test_an_allowed_origin_gets_the_cors_headers_on_every_response(self):
+        servlet, _, _, _ = create_servlet(SUBJECT, allowed_origins=f"{WEB}, http://other.example")
+
+        response = await servlet.handle(request("GET", "/crud/books", headers={"origin": WEB}))
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.headers["Access-Control-Allow-Origin"], WEB)
+        self.assertEqual(response.headers["Vary"], "Origin")
+
+    async def test_an_error_response_carries_them_too(self):
+        servlet, _, _, _ = create_servlet(SUBJECT, allowed_origins=WEB)
+
+        response = await servlet.handle(request("GET", "/nowhere", headers={"origin": WEB}))
+
+        self.assertEqual(response.status, 404)
+        self.assertEqual(response.headers["Access-Control-Allow-Origin"], WEB)
+
+    async def test_the_preflight_of_an_allowed_origin_is_answered_without_reaching_the_use_cases(self):
+        servlet, crud, _, _ = create_servlet(SUBJECT, allowed_origins=WEB)
+
+        response = await servlet.handle(request("OPTIONS", "/crud/books", headers={
+            "origin": WEB, "access-control-request-method": "POST",
+            "access-control-request-headers": "authorization, content-type",
+        }))
+
+        self.assertEqual(response.status, 204)
+        self.assertEqual(response.headers["Access-Control-Allow-Origin"], WEB)
+        self.assertIn("POST", response.headers["Access-Control-Allow-Methods"])
+        self.assertEqual(response.headers["Access-Control-Allow-Headers"], "Authorization, Content-Type")
+        self.assertEqual(crud.calls, [])
+
+    async def test_another_origin_gets_no_cors_header(self):
+        servlet, _, _, _ = create_servlet(SUBJECT, allowed_origins=WEB)
+
+        response = await servlet.handle(request("GET", "/crud/books", headers={"origin": "http://evil.example"}))
+        preflight = await servlet.handle(request("OPTIONS", "/crud/books", headers={"origin": "http://evil.example"}))
+
+        self.assertNotIn("Access-Control-Allow-Origin", response.headers)
+        self.assertEqual(preflight.status, 204)
+        self.assertNotIn("Access-Control-Allow-Origin", preflight.headers)
+
+    async def test_without_configuration_nothing_changes(self):
+        servlet, _, _, _ = create_servlet(SUBJECT)
+
+        response = await servlet.handle(request("GET", "/crud/books", headers={"origin": WEB}))
+
+        self.assertNotIn("Access-Control-Allow-Origin", response.headers)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -84,6 +84,22 @@ fournisseur de vérifier une signature couvrant toute la requête.
 
 Sans aucune `IAuthentication` publiée, ou si aucune ne reconnaît la requête, elle est anonyme : les items publics restent accessibles, les items sécurisés répondent `401`/`403` selon les règles d'`endpoints_storage`. `permissions_app` fournira l'implémentation JWT.
 
+## Pages servies ailleurs (CORS)
+
+Une page servie par une autre origine (un processus de front web sur un autre port, par exemple) n'appelle
+cette API que si son origine est autorisée :
+
+```yaml
+components:
+  ApiServlet:
+    allowed_origins: "http://localhost:8304"   # origines séparées par des virgules ; vide par défaut
+```
+
+Pour une origine autorisée, chaque réponse porte `Access-Control-Allow-Origin` (et `Vary: Origin`), et le
+pré-vol `OPTIONS` du navigateur reçoit `204` avec les méthodes et les en-têtes admis (`Authorization`,
+`Content-Type`) sans atteindre aucun use case. Toute autre origine ne reçoit aucun en-tête CORS : le
+navigateur refuse la réponse. Sans configuration, rien ne change.
+
 ## Erreurs et enveloppe
 
 ```json

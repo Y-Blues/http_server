@@ -32,12 +32,16 @@ class ApiServlet(IHttpServlet):
         authentications: list[IAuthentication],
         services: list[IServiceEndpoint],
         path: str = "/api",
+        allowed_origins: str = "",
     ) -> None:
+        # allowed_origins: comma separated origins (scheme://host:port) of pages served elsewhere that may
+        # call this API from a browser (CORS); empty, none may
         self._crud = crud
         self._drafts = drafts
         self._catalog = catalog
         self._authentications = authentications
         self._services = services
+        self._allowed_origins = {origin.strip() for origin in allowed_origins.split(",") if origin.strip()}
 
     async def start(self) -> None:
         pass
@@ -46,6 +50,14 @@ class ApiServlet(IHttpServlet):
         pass
 
     async def handle(self, request: HttpRequest) -> HttpResponse:
+        origin = request.headers.get("origin")
+        allowed = origin if origin in self._allowed_origins else None
+        if request.method == "OPTIONS":
+            # a browser's preflight: answered here, it never reaches a use case
+            return _cross_origin(HttpResponse(status=204, body=b"", content_type="text/plain"), allowed, preflight=True)
+        return _cross_origin(await self._handle(request), allowed)
+
+    async def _handle(self, request: HttpRequest) -> HttpResponse:
         try:
             subject = await self._authenticate(request)
             fields = _decode_body(request)
@@ -204,3 +216,16 @@ def _error(status: int, error: Exception | str) -> HttpResponse:
     message = error if isinstance(error, str) else str(error)
     body = json.dumps({"status": status, "meta": {"type": "object"}, "data": {"error": message}}).encode()
     return HttpResponse(status=status, body=body, content_type="application/json")
+
+
+def _cross_origin(response: HttpResponse, origin: str | None, preflight: bool = False) -> HttpResponse:
+    """the CORS headers letting a page of that allowed origin read the response; none for any other"""
+    if origin is None:
+        return response
+    response.headers["Access-Control-Allow-Origin"] = origin
+    response.headers["Vary"] = "Origin"
+    if preflight:
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+        response.headers["Access-Control-Max-Age"] = "600"
+    return response

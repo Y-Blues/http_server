@@ -168,11 +168,12 @@ class FakeServiceEndpoint(IServiceEndpoint):
         pass
 
 
-def create_servlet(subject=None, authentications=None, services=None):
+def create_servlet(subject=None, authentications=None, services=None, allowed_origins=""):
     """a servlet wired to fresh fakes; returns (servlet, crud, drafts, catalog)"""
     from ycappuccino.http_server.servlet import ApiServlet
 
     crud, drafts, catalog = FakeCrud(), FakeDrafts(), FakeItemCatalog()
     if authentications is None:
         authentications = [FakeAuthentication(subject)]
-    return ApiServlet(crud, drafts, catalog, authentications, services or []), crud, drafts, catalog
+    servlet = ApiServlet(crud, drafts, catalog, authentications, services or [], allowed_origins=allowed_origins)
+    return servlet, crud, drafts, catalog
